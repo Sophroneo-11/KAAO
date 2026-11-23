@@ -1,5 +1,9 @@
 package com.kaao.security.data.local.db
 
+import com.kaao.security.core.crypto.SignedDefinitionBundle
+import com.kaao.security.core.crypto.SignedDomainEntry
+import com.kaao.security.core.crypto.SignedThreatEntry
+
 /**
  * Curated offline threat signature and DNS blocklist seed pack.
  * Populates the SQLCipher vault & SHA-256 Bloom Filter on first run so immediate offline protection works.
@@ -7,6 +11,29 @@ package com.kaao.security.data.local.db
 object SeedThreatCatalog {
 
     const val INITIAL_BUNDLE_VERSION = 2026112201L
+    const val INITIAL_ISSUED_AT_EPOCH_SEC = 1763856000L
+    const val INITIAL_BUNDLE_ECDSA_SIG_B64 =
+        "MEUCIQDnNq8qUc7Gs8Va7bDRJeNzjtsAYFd3wwofOf1d0KOTGAIgX3ZbMTR/HKx5C+3vE9tq2P7FOTK8k9XxEq2mUT/TiIc="
+
+    fun signedInitialBundle(): SignedDefinitionBundle = SignedDefinitionBundle(
+        version = INITIAL_BUNDLE_VERSION,
+        issuedAtEpochSec = INITIAL_ISSUED_AT_EPOCH_SEC,
+        sha256Signatures = initialSignatures(0L).map {
+            SignedThreatEntry(
+                sha256 = it.sha256,
+                family = it.family,
+                category = it.category,
+                severity = it.severity
+            )
+        },
+        blockedDomains = initialDnsRules(0L).map {
+            SignedDomainEntry(
+                domain = it.domain,
+                category = it.category
+            )
+        },
+        ecdsaP256SignatureBase64 = INITIAL_BUNDLE_ECDSA_SIG_B64
+    )
 
     fun initialSignatures(nowMillis: Long): List<ThreatSignatureEntity> = listOf(
         // Standard EICAR Anti-Malware Test File SHA-256 (verified industry benchmark)

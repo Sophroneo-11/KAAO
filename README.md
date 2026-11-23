@@ -26,8 +26,18 @@
    - **3-Stage Duplicate Finder**: exact size → 3-region partial SHA-256 → full streaming SHA-256.
    - Leftover APKs (with installed status check), temp/log files, bottom-up empty folders, large/messaging media with **MediaStore fallback**, `StorageStatsManager` per-app storage/cache breakdown, exclusion whitelist, and explicit user-confirmed safe deletion modal.
 
-## Build & Verification
+## Build, R8 Release Verification & Definition Signing
 
 ```bash
-./gradlew testDebugUnitTest lintDebug assembleDebug
+./gradlew testDebugUnitTest lintDebug assembleDebug assembleRelease
+```
+
+### Signing Custom Threat & DNS Definition Bundles (ECDSA-P256)
+
+```bash
+python3 scripts/sign_definitions.py genkey --out-dir ./keys
+python3 scripts/sign_definitions.py sign \
+  --private-key ./keys/kaao_p256_private.pem \
+  --input unsigned_bundle.json \
+  --output signed_bundle.json
 ```

@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.VerifiedUser
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -54,6 +55,8 @@ fun SettingsScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var vtKeyDraft by rememberSaveable { mutableStateOf("") }
+    var showImportBundleDialog by rememberSaveable { mutableStateOf(false) }
+    var bundleJsonDraft by rememberSaveable { mutableStateOf("") }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -213,7 +216,14 @@ fun SettingsScreen(
                     onClick = { viewModel.rebuildAndVerifyVault() },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Rebuild Bloom Filter & Verify Vault")
+                    Text("Verify ECDSA-P256 Signature & Rebuild Bloom Filter")
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                OutlinedButton(
+                    onClick = { showImportBundleDialog = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Import Signed JSON Definition Bundle")
                 }
             }
         }
@@ -295,6 +305,57 @@ fun SettingsScreen(
                 )
             }
         }
+    }
+
+    if (showImportBundleDialog) {
+        AlertDialog(
+            onDismissRequest = { showImportBundleDialog = false },
+            containerColor = KaaoColors.SurfaceDark,
+            title = {
+                Text(
+                    text = "Import Signed Definition Bundle",
+                    color = KaaoColors.TextPrimary
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Paste a KAAO SignedDefinitionBundle JSON payload. Signatures are verified with SHA256withECDSA (NIST P-256) and monotonic anti-rollback before updating the vault.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = KaaoColors.TextSecondary
+                    )
+                    OutlinedTextField(
+                        value = bundleJsonDraft,
+                        onValueChange = { bundleJsonDraft = it },
+                        placeholder = { Text("{\"version\": ..., \"ecdsaP256SignatureBase64\": \"...\"}") },
+                        minLines = 4,
+                        maxLines = 8,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.importSignedDefinitionBundle(bundleJsonDraft)
+                        bundleJsonDraft = ""
+                        showImportBundleDialog = false
+                    },
+                    enabled = bundleJsonDraft.isNotBlank(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = KaaoColors.CyberEmerald,
+                        contentColor = KaaoColors.ObsidianBg
+                    )
+                ) {
+                    Text("Verify & Apply")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showImportBundleDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 

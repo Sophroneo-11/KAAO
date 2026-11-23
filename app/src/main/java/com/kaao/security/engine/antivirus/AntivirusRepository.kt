@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -48,7 +49,8 @@ class AntivirusRepository @Inject constructor(
     private val staticApkAnalyzer: StaticApkAnalyzer,
     private val stalkerwareAuditor: StalkerwarePrivilegeAuditor,
     private val cloudReputationEngine: CloudReputationEngine,
-    private val signatureBundleVerifier: SignatureBundleVerifier
+    private val signatureBundleVerifier: SignatureBundleVerifier,
+    private val json: Json
 ) {
     private val _scanProgress = MutableStateFlow(AntivirusScanProgress())
     val scanProgress: StateFlow<AntivirusScanProgress> = _scanProgress.asStateFlow()
@@ -68,20 +70,39 @@ class AntivirusRepository @Inject constructor(
     val bloomItemCount: Int
         get() = bloomFilter.itemCount
 
-    suspend fun initializeVaultAndBloomFilter() = withContext(Dispatchers.IO) {
+    suspend fun initializeVaultAndBloomFilter(): BundleVerificationResult = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
-        if (threatSignatureDao.count() == 0) {
+        val seedBundle = SeedThreatCatalog.signedInitialBundle()
+        val verification = signatureBundleVerifier.verify(
+            bundle = seedBundle,
+            currentInstalledVersion = 0L
+        )
+
+        if (threatSignatureDao.count() == 0 && verification is BundleVerificationResult.Verified) {
             threatSignatureDao.upsertAll(SeedThreatCatalog.initialSignatures(now))
         }
-        if (dnsBlockRuleDao.count() == 0) {
+        if (dnsBlockRuleDao.count() == 0 && verification is BundleVerificationResult.Verified) {
             dnsBlockRuleDao.upsertAll(SeedThreatCatalog.initialDnsRules(now))
         }
+
         val allHashes = threatSignatureDao.getAllHashes()
         bloomFilter.rebuildFromHexHashes(allHashes)
         val settings = prefs.getSettings()
-        if (settings.lastDefinitionVerifiedMillis == 0L) {
-            prefs.updateDefinitionMetadata(SeedThreatCatalog.INITIAL_BUNDLE_VERSION, now)
+        if (verification is BundleVerificationResult.Verified && settings.lastDefinitionVerifiedMillis == 0L) {
+            prefs.updateDefinitionMetadata(seedBundle.version, now)
         }
+        verification
+    }
+
+    suspend fun importSignedJsonBundle(rawJson: String): BundleVerificationResult = withContext(Dispatchers.IO) {
+        val parsed = runCatching {
+            json.decodeFromString(SignedDefinitionBundle.serializer(), rawJson)
+        }.getOrElse { error ->
+            return@withContext BundleVerificationResult.Rejected(
+                "Malformed definition bundle JSON: ${error.message ?: "parse error"}"
+            )
+        }
+        verifyAndApplySignedBundle(parsed)
     }
 
     suspend fun verifyAndApplySignedBundle(

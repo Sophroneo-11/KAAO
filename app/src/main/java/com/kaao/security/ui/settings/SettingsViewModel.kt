@@ -134,8 +134,25 @@ class SettingsViewModel @Inject constructor(
 
     fun rebuildAndVerifyVault() {
         viewModelScope.launch {
-            antivirusRepository.initializeVaultAndBloomFilter()
-            bannerFlow.value = "SQLCipher vault verified & Bloom Filter rebuilt (${antivirusRepository.bloomItemCount} signatures)."
+            val result = antivirusRepository.initializeVaultAndBloomFilter()
+            bannerFlow.value = when (result) {
+                is com.kaao.security.core.crypto.BundleVerificationResult.Verified ->
+                    "ECDSA-P256 verified (v${result.version}) • Bloom Filter rebuilt (${antivirusRepository.bloomItemCount} signatures, ${result.domainCount} domains)."
+                is com.kaao.security.core.crypto.BundleVerificationResult.Rejected ->
+                    "Verification warning: ${result.reason}"
+            }
+        }
+    }
+
+    fun importSignedDefinitionBundle(rawJson: String) {
+        viewModelScope.launch {
+            val result = antivirusRepository.importSignedJsonBundle(rawJson)
+            bannerFlow.value = when (result) {
+                is com.kaao.security.core.crypto.BundleVerificationResult.Verified ->
+                    "Signed bundle v${result.version} verified & applied (+${result.signatureCount} hashes, +${result.domainCount} domains)."
+                is com.kaao.security.core.crypto.BundleVerificationResult.Rejected ->
+                    "Bundle rejected: ${result.reason}"
+            }
         }
     }
 

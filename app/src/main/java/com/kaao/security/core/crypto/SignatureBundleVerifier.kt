@@ -125,7 +125,7 @@ class SignatureBundleVerifier @Inject constructor() {
          * Pinned NIST P-256 (secp256r1) X.509 SPKI public key for KAAO definition releases.
          */
         const val DEFAULT_PINNED_P256_PUBLIC_KEY_B64 =
-            "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE4v8W2F0z0h7h0aP5v6mG0c0h6o4S" +
-                "7w3H8vV2F9g5k3j1L7p8n2q4R6t8V0w2Y4z6A8c0E2g4I6k8M0o2Q4s6Ug=="
+            "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEwFj2g+PfFDbk8/uNVq8sXQJ0DHW2" +
+                "2So0D+p7ngD0l1G/w6E9CS8eWJ7qVL8keN64AD1aKW0vM0Qr43n6oCU1cA=="
     }
 }
