@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!-- KAAO is a security & cleaner suite that explicitly explains and requests these special permissions just-in-time -->
+    <issue id="QueryAllPackagesPermission" severity="informational" />
+    <issue id="ScopedStorage" severity="informational" />
+    <issue id="GradleDependency" severity="informational" />
+    <issue id="AndroidGradlePluginVersion" severity="informational" />
+    <issue id="NewerVersionAvailable" severity="informational" />
+    <issue id="ForegroundServicePermission" severity="error" />
+    <issue id="ForegroundServiceType" severity="error" />
+    <issue id="ExportedService" severity="error" />
+    <issue id="ExportedReceiver" severity="error" />
+</lint>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">KAAO</string>
+    <string name="vpn_service_label">KAAO Aegis Shield</string>
+    <string name="notif_channel_shield">Aegis Protection &amp; VPN</string>
+    <string name="notif_channel_shield_desc">Ongoing status for Aegis DNS Shield, Game Firewall, and Real-Time Monitor</string>
+    <string name="notif_channel_threats">Threat &amp; Stalkerware Alerts</string>
+    <string name="notif_channel_threats_desc">High-priority alerts when malware, suspicious APKs, or risky privileges are detected</string>
+    <string name="notif_channel_scan">Deep Security &amp; Storage Scans</string>
+    <string name="notif_channel_scan_desc">Progress notifications for active antivirus and storage cleaner scans</string>
+    <string name="notif_channel_game">Game Booster HUD &amp; Session</string>
+    <string name="notif_channel_game_desc">Active game optimization controls and system restore actions</string>
+</resources>

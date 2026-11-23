@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Outer Cyber Shield -->
+    <path
+        android:fillColor="#0F2942"
+        android:pathData="M54,22 L78,31 L78,53 C78,68 67.5,79.5 54,85 C40.5,79.5 30,68 30,53 L30,31 Z"
+        android:strokeWidth="3.2"
+        android:strokeColor="#00E5A0"
+        android:strokeLineJoin="round" />
+    <!-- Inner Shield Highlight -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M54,28 L72,34.8 L72,52.5 C72,64.2 64.2,73.5 54,78.2 C43.8,73.5 36,64.2 36,52.5 L36,34.8 Z"
+        android:strokeWidth="1.2"
+        android:strokeColor="#38BDF8" />
+    <!-- Stylized K Emblem -->
+    <path
+        android:fillColor="#00E5A0"
+        android:pathData="M43,39 L48.5,39 L48.5,68 L43,68 Z" />
+    <path
+        android:fillColor="#38BDF8"
+        android:pathData="M48.5,53.5 L61.5,39 L68,39 L55,53.5 L68.5,68 L61.5,68 Z" />
+</vector>
