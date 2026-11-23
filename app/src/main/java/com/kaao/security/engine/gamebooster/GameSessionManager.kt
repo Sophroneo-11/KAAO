@@ -173,7 +173,14 @@ class GameSessionManager @Inject constructor(
         // 1. Restore DND
         if (snap.previousDndFilter != -1 && permissionManager.hasDndPolicyPermission()) {
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
-            runCatching { nm?.setInterruptionFilter(snap.previousDndFilter) }
+            val validFilter = when (snap.previousDndFilter) {
+                NotificationManager.INTERRUPTION_FILTER_ALL -> NotificationManager.INTERRUPTION_FILTER_ALL
+                NotificationManager.INTERRUPTION_FILTER_PRIORITY -> NotificationManager.INTERRUPTION_FILTER_PRIORITY
+                NotificationManager.INTERRUPTION_FILTER_NONE -> NotificationManager.INTERRUPTION_FILTER_NONE
+                NotificationManager.INTERRUPTION_FILTER_ALARMS -> NotificationManager.INTERRUPTION_FILTER_ALARMS
+                else -> NotificationManager.INTERRUPTION_FILTER_ALL
+            }
+            runCatching { nm?.setInterruptionFilter(validFilter) }
         }
 
         // 2. Restore brightness & mode
