@@ -8,6 +8,7 @@ import com.kaao.security.data.local.prefs.KaaoPreferencesRepository
 import com.kaao.security.engine.antivirus.AntivirusRepository
 import com.kaao.security.engine.gamebooster.GameSessionManager
 import com.kaao.security.engine.network.AegisVpnController
+import com.kaao.security.worker.DefinitionUpdateWorker
 import com.kaao.security.worker.DeltaPackageAuditWorker
 import com.kaao.security.worker.SignatureIntegrityWorker
 import dagger.hilt.android.HiltAndroidApp
@@ -47,6 +48,7 @@ class KaaoApplication : Application(), Configuration.Provider {
                 DeltaPackageAuditWorker.schedulePeriodic(this@KaaoApplication)
             }
             SignatureIntegrityWorker.schedulePeriodic(this@KaaoApplication)
+            DefinitionUpdateWorker.schedulePeriodic(this@KaaoApplication)
         }
     }
 }

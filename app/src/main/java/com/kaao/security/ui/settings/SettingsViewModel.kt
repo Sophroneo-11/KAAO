@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.kaao.security.core.crypto.BundleVerificationResult
 import com.kaao.security.core.crypto.KeystorePassphraseManager
 import com.kaao.security.core.permission.PermissionManager
 import com.kaao.security.core.permission.PermissionStatusSnapshot
@@ -11,6 +12,7 @@ import com.kaao.security.data.local.db.WhitelistEntryEntity
 import com.kaao.security.data.local.prefs.KaaoPreferencesRepository
 import com.kaao.security.data.local.prefs.KaaoSettings
 import com.kaao.security.engine.antivirus.AntivirusRepository
+import com.kaao.security.engine.antivirus.DefinitionFeedRepository
 import com.kaao.security.engine.cleaner.SafeDeletionRepository
 import com.kaao.security.service.RealtimeMonitorService
 import com.kaao.security.worker.DeltaPackageAuditWorker
@@ -40,6 +42,7 @@ class SettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val prefs: KaaoPreferencesRepository,
     private val antivirusRepository: AntivirusRepository,
+    private val definitionFeedRepository: DefinitionFeedRepository,
     private val safeDeletionRepository: SafeDeletionRepository,
     private val keystorePassphraseManager: KeystorePassphraseManager,
     private val permissionManager: PermissionManager
@@ -136,10 +139,23 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             val result = antivirusRepository.initializeVaultAndBloomFilter()
             bannerFlow.value = when (result) {
-                is com.kaao.security.core.crypto.BundleVerificationResult.Verified ->
+                is BundleVerificationResult.Verified ->
                     "ECDSA-P256 verified (v${result.version}) • Bloom Filter rebuilt (${antivirusRepository.bloomItemCount} signatures, ${result.domainCount} domains)."
-                is com.kaao.security.core.crypto.BundleVerificationResult.Rejected ->
+                is BundleVerificationResult.Rejected ->
                     "Verification warning: ${result.reason}"
+            }
+        }
+    }
+
+    fun syncRemoteDefinitions() {
+        viewModelScope.launch {
+            bannerFlow.value = "Fetching ECDSA-P256 signed definitions over certificate-pinned TLS..."
+            val result = definitionFeedRepository.syncFromRemoteFeed()
+            bannerFlow.value = when (result) {
+                is BundleVerificationResult.Verified ->
+                    "Remote feed v${result.version} verified (ECDSA-P256) • ${result.signatureCount} hashes & ${result.domainCount} domains synced."
+                is BundleVerificationResult.Rejected ->
+                    "Remote sync skipped/rejected: ${result.reason}"
             }
         }
     }
@@ -148,9 +164,9 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             val result = antivirusRepository.importSignedJsonBundle(rawJson)
             bannerFlow.value = when (result) {
-                is com.kaao.security.core.crypto.BundleVerificationResult.Verified ->
+                is BundleVerificationResult.Verified ->
                     "Signed bundle v${result.version} verified & applied (+${result.signatureCount} hashes, +${result.domainCount} domains)."
-                is com.kaao.security.core.crypto.BundleVerificationResult.Rejected ->
+                is BundleVerificationResult.Rejected ->
                     "Bundle rejected: ${result.reason}"
             }
         }

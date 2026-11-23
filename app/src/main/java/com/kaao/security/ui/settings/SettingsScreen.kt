@@ -212,6 +212,17 @@ fun SettingsScreen(
                     }
                 }
                 Spacer(modifier = Modifier.height(10.dp))
+                Button(
+                    onClick = { viewModel.syncRemoteDefinitions() },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = KaaoColors.ShieldCyan,
+                        contentColor = KaaoColors.ObsidianBg
+                    )
+                ) {
+                    Text("Check Remote Signed Definitions (TLS + ECDSA)")
+                }
+                Spacer(modifier = Modifier.height(6.dp))
                 OutlinedButton(
                     onClick = { viewModel.rebuildAndVerifyVault() },
                     modifier = Modifier.fillMaxWidth()

@@ -1,0 +1,157 @@
+name: KAAO Release APK & AAB
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag name (e.g. v1.0.0-beta.1)'
+        required: true
+        default: 'v1.0.0-beta.1'
+      prerelease:
+        description: 'Mark GitHub Release as pre-release'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build Verified Installable APKs & Publish Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew
+
+      - name: Setup Gradle cache
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Resolve release tag
+        id: meta
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+            PRERELEASE="${{ github.event.inputs.prerelease }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+            if [[ "$TAG" == *"-"* ]]; then
+              PRERELEASE="true"
+            else
+              PRERELEASE="false"
+            fi
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+
+      - name: Run Unit Tests & Android Lint Gate
+        run: |
+          ./gradlew testDebugUnitTest lintDebug --stacktrace
+
+      - name: Prepare Release Signing Keystore
+        id: signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          mkdir -p /tmp/kaao-signing
+          KEYSTORE_FILE="/tmp/kaao-signing/release.jks"
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_FILE"
+            echo "mode=production" >> "$GITHUB_OUTPUT"
+            echo "KAAO_KEYSTORE_PATH=$KEYSTORE_FILE" >> "$GITHUB_ENV"
+            echo "KAAO_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "KAAO_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+            echo "KAAO_KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
+          else
+            # Generate a self-signed preview keystore so the R8-minified APK is directly installable on phones for testing
+            keytool -genkeypair -v \
+              -keystore "$KEYSTORE_FILE" \
+              -storepass kaao-preview-pass \
+              -keypass kaao-preview-pass \
+              -alias kaao-preview \
+              -keyalg RSA -keysize 2048 -validity 3650 \
+              -dname "CN=KAAO Preview, OU=Security, O=KAAO, C=US"
+            echo "mode=preview" >> "$GITHUB_OUTPUT"
+            echo "KAAO_KEYSTORE_PATH=$KEYSTORE_FILE" >> "$GITHUB_ENV"
+            echo "KAAO_KEYSTORE_PASSWORD=kaao-preview-pass" >> "$GITHUB_ENV"
+            echo "KAAO_KEY_ALIAS=kaao-preview" >> "$GITHUB_ENV"
+            echo "KAAO_KEY_PASSWORD=kaao-preview-pass" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build Debug & Signed R8 Release APKs
+        run: |
+          ./gradlew assembleDebug assembleRelease --stacktrace
+          if [ "${{ steps.signing.outputs.mode }}" = "production" ]; then
+            ./gradlew bundleRelease --stacktrace
+          fi
+
+      - name: Stage Release Artifacts & SHA-256 Checksums
+        run: |
+          TAG="${{ steps.meta.outputs.tag }}"
+          MODE="${{ steps.signing.outputs.mode }}"
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/app-debug.apk "dist/KAAO-${TAG}-debug.apk"
+          if [ "$MODE" = "production" ]; then
+            cp app/build/outputs/apk/release/app-release.apk "dist/KAAO-${TAG}-release.apk"
+            cp app/build/outputs/bundle/release/app-release.aab "dist/KAAO-${TAG}-release.aab"
+          else
+            cp app/build/outputs/apk/release/app-release.apk "dist/KAAO-${TAG}-preview-release.apk"
+          fi
+          (cd dist && sha256sum * > SHA256SUMS.txt)
+          ls -lh dist/
+          cat dist/SHA256SUMS.txt
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: kaao-release-${{ steps.meta.outputs.tag }}
+          path: dist/*
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.meta.outputs.tag }}"
+          MODE="${{ steps.signing.outputs.mode }}"
+          PRERELEASE_FLAG=""
+          if [ "${{ steps.meta.outputs.prerelease }}" = "true" ]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+
+          NOTES="### KAAO Android ${TAG} (${MODE} signing)
+          
+          Verified in CI with \`testDebugUnitTest\`, \`lintDebug\`, \`assembleDebug\`, and R8-minified \`assembleRelease\`.
+          
+          **How to install on your Android phone for testing:**
+          1. Download **\`KAAO-${TAG}-preview-release.apk\`** (R8-minified, smaller & faster) or **\`KAAO-${TAG}-debug.apk\`** below.
+          2. Open the downloaded \`.apk\` on your phone and allow *Install unknown apps* if prompted.
+          3. Verify the APK digest against \`SHA256SUMS.txt\`.
+          
+          > Note: Preview releases are signed with a temporary test key. Before publishing to Google Play, configure your permanent upload keystore secrets as documented in \`docs/PLAY_STORE_COMPLIANCE.md\`."
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* \
+              --target "${{ github.sha }}" \
+              --title "KAAO ${TAG}" \
+              --notes "$NOTES" \
+              $PRERELEASE_FLAG
+          fi

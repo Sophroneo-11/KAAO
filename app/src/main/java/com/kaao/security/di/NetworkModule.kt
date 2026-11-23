@@ -1,6 +1,7 @@
 package com.kaao.security.di
 
 import com.kaao.security.data.remote.CloudReputationProvider
+import com.kaao.security.data.remote.DefinitionFeedApi
 import com.kaao.security.data.remote.MalwareBazaarApi
 import com.kaao.security.data.remote.MalwareBazaarProvider
 import com.kaao.security.data.remote.VirusTotalApi
@@ -27,7 +28,7 @@ object NetworkModule {
 
     /**
      * Hardened TLS CertificatePinner using primary + backup root/intermediate SPKI pins
-     * (ISRG Root X1/X2, DigiCert Global Root G2/CA, Google Trust Services Root R1/R4).
+     * (ISRG Root X1/X2, DigiCert Global Root G2/CA/EV, Google Trust Services Root R1/R4).
      */
     @Provides
     @Singleton
@@ -36,6 +37,7 @@ object NetworkModule {
         val isrgRootX2 = "sha256/diGVwiVYbubAI3RW4hB9xU8e/CH2GnkuvVFZE8zmgzI="
         val digiCertGlobalRootCa = "sha256/r/mIkG3eEpVdm+u/ko/cwxzOMo1bk4TyHIlByibiA5E="
         val digiCertGlobalRootG2 = "sha256/i7WTqTvh0OioIruIfFR4kMPnBqrS2rdiVPl/s2uC/CY="
+        val digiCertHighAssuranceEv = "sha256/WoiWRyIOVNa9ihaBciRSC7XHjliYS9VwUGOIud4PB18="
         val gtsRootR1 = "sha256/hxqRlPTu1bMS/0DITB1SSu0vd4u/8l8TjPgfaAp63Gc="
         val gtsRootR4 = "sha256/mEflZT5enoR1FuXLgYYGqnVEoZvmf9c2bVBpiOjYQ0c="
 
@@ -44,6 +46,13 @@ object NetworkModule {
             .add("www.virustotal.com", gtsRootR1, gtsRootR4, digiCertGlobalRootG2, digiCertGlobalRootCa)
             .add("cloudflare-dns.com", digiCertGlobalRootG2, digiCertGlobalRootCa, gtsRootR1, gtsRootR4)
             .add("dns.quad9.net", digiCertGlobalRootG2, digiCertGlobalRootCa, isrgRootX1)
+            .add(
+                "raw.githubusercontent.com",
+                digiCertHighAssuranceEv,
+                digiCertGlobalRootG2,
+                digiCertGlobalRootCa,
+                isrgRootX1
+            )
             .build()
     }
 
@@ -91,6 +100,17 @@ object NetworkModule {
 
     @Provides
     @Singleton
+    @Named("definitionFeed")
+    fun provideDefinitionFeedRetrofit(okHttpClient: OkHttpClient, json: Json): Retrofit {
+        return Retrofit.Builder()
+            .baseUrl("https://raw.githubusercontent.com/")
+            .client(okHttpClient)
+            .addConverterFactory(json.asConverterFactory("application/json; charset=UTF8".toMediaType()))
+            .build()
+    }
+
+    @Provides
+    @Singleton
     fun provideMalwareBazaarApi(@Named("malwareBazaar") retrofit: Retrofit): MalwareBazaarApi =
         retrofit.create(MalwareBazaarApi::class.java)
 
@@ -98,6 +118,11 @@ object NetworkModule {
     @Singleton
     fun provideVirusTotalApi(@Named("virusTotal") retrofit: Retrofit): VirusTotalApi =
         retrofit.create(VirusTotalApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideDefinitionFeedApi(@Named("definitionFeed") retrofit: Retrofit): DefinitionFeedApi =
+        retrofit.create(DefinitionFeedApi::class.java)
 }
 
 @Module
