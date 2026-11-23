@@ -31,14 +31,15 @@ class HealthScoreCalculator @Inject constructor() {
         nowMillis: Long = System.currentTimeMillis()
     ): HealthScoreReport {
         // 1. Antivirus (35 pts)
-        val avDeduction = threatFindings.sumOf { finding ->
-            when (finding.severity) {
+        val avDeduction: Int = threatFindings.sumOf { finding ->
+            val pts: Int = when (finding.severity) {
                 ThreatSeverity.CRITICAL -> 35
                 ThreatSeverity.HIGH -> 22
                 ThreatSeverity.MEDIUM -> 12
                 ThreatSeverity.LOW -> 5
                 ThreatSeverity.SAFE -> 0
             }
+            pts
         }
         val avPoints = (35 - avDeduction).coerceIn(0, 35)
         val avSeverity = when {
@@ -54,14 +55,15 @@ class HealthScoreCalculator @Inject constructor() {
         }
 
         // 2. Stalkerware Privileges (20 pts)
-        val stalkerDeduction = stalkerwareFindings.sumOf { finding ->
-            when (finding.severity) {
+        val stalkerDeduction: Int = stalkerwareFindings.sumOf { finding ->
+            val pts: Int = when (finding.severity) {
                 ThreatSeverity.CRITICAL -> 20
                 ThreatSeverity.HIGH -> 14
                 ThreatSeverity.MEDIUM -> 8
                 ThreatSeverity.LOW -> 3
                 ThreatSeverity.SAFE -> 0
             }
+            pts
         }
         val stalkerPoints = (20 - stalkerDeduction).coerceIn(0, 20)
         val stalkerSeverity = stalkerwareFindings.maxByOrNull { it.severity.weight }?.severity
