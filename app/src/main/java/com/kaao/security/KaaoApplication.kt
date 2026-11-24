@@ -10,6 +10,7 @@ import com.kaao.security.engine.gamebooster.GameSessionManager
 import com.kaao.security.engine.network.AegisVpnController
 import com.kaao.security.worker.DefinitionUpdateWorker
 import com.kaao.security.worker.DeltaPackageAuditWorker
+import com.kaao.security.worker.ScheduledAutoScanWorker
 import com.kaao.security.worker.SignatureIntegrityWorker
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
@@ -47,6 +48,7 @@ class KaaoApplication : Application(), Configuration.Provider {
             if (settings.deltaPackageAuditEnabled) {
                 DeltaPackageAuditWorker.schedulePeriodic(this@KaaoApplication)
             }
+            ScheduledAutoScanWorker.applySchedule(this@KaaoApplication, settings.autoScanInterval)
             SignatureIntegrityWorker.schedulePeriodic(this@KaaoApplication)
             DefinitionUpdateWorker.schedulePeriodic(this@KaaoApplication)
         }

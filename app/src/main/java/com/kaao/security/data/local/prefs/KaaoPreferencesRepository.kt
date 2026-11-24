@@ -8,9 +8,11 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.kaao.security.core.crypto.KeystorePassphraseManager
 import com.kaao.security.data.local.db.SeedThreatCatalog
+import com.kaao.security.domain.model.AutoScanInterval
 import com.kaao.security.domain.model.DohProvider
 import com.kaao.security.domain.model.GameBoostConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -23,6 +25,10 @@ import javax.inject.Singleton
 private val Context.kaaoDataStore: DataStore<Preferences> by preferencesDataStore(name = "kaao_security_prefs")
 
 data class KaaoSettings(
+    val onboardingCompleted: Boolean = false,
+    val biometricLockEnabled: Boolean = false,
+    val autoScanInterval: AutoScanInterval = AutoScanInterval.DAILY,
+    val lastAutoScanMillis: Long = 0L,
     val realtimeShieldEnabled: Boolean = false,
     val downloadsObserverEnabled: Boolean = true,
     val deltaPackageAuditEnabled: Boolean = true,
@@ -35,8 +41,17 @@ data class KaaoSettings(
     val definitionVersion: Long = SeedThreatCatalog.INITIAL_BUNDLE_VERSION,
     val lastDefinitionVerifiedMillis: Long = 0L,
     val lastPackageSequenceNumber: Int = 0,
-    val gameBoostConfig: GameBoostConfig = GameBoostConfig()
-)
+    val gameBoostConfig: GameBoostConfig = GameBoostConfig(),
+    val gameFirewallExceptionPackages: Set<String> = DEFAULT_VOICE_CHAT_PACKAGES
+) {
+    companion object {
+        val DEFAULT_VOICE_CHAT_PACKAGES = setOf(
+            "com.discord",
+            "com.whatsapp",
+            "org.telegram.messenger"
+        )
+    }
+}
 
 data class SavedSystemSnapshot(
     val hasActiveSnapshot: Boolean = false,
@@ -59,7 +74,12 @@ class KaaoPreferencesRepository @Inject constructor(
     val settingsFlow: Flow<KaaoSettings> = dataStore.data.map { prefs ->
         val dohId = prefs[KEY_DOH_PROVIDER] ?: DohProvider.CLOUDFLARE.id
         val provider = DohProvider.entries.firstOrNull { it.id == dohId } ?: DohProvider.CLOUDFLARE
+        val exceptions = prefs[KEY_GB_FIREWALL_EXCEPTIONS] ?: KaaoSettings.DEFAULT_VOICE_CHAT_PACKAGES
         KaaoSettings(
+            onboardingCompleted = prefs[KEY_ONBOARDING_COMPLETED] ?: false,
+            biometricLockEnabled = prefs[KEY_BIOMETRIC_LOCK] ?: false,
+            autoScanInterval = AutoScanInterval.fromId(prefs[KEY_AUTO_SCAN_INTERVAL]),
+            lastAutoScanMillis = prefs[KEY_LAST_AUTO_SCAN_MS] ?: 0L,
             realtimeShieldEnabled = prefs[KEY_REALTIME_SHIELD] ?: false,
             downloadsObserverEnabled = prefs[KEY_DOWNLOADS_OBSERVER] ?: true,
             deltaPackageAuditEnabled = prefs[KEY_DELTA_AUDIT] ?: true,
@@ -79,11 +99,28 @@ class KaaoPreferencesRepository @Inject constructor(
                 targetBrightnessPercent = prefs[KEY_GB_BRIGHTNESS_PCT] ?: 75,
                 pauseAutoSync = prefs[KEY_GB_PAUSE_SYNC] ?: true,
                 showFloatingHud = prefs[KEY_GB_HUD] ?: true
-            )
+            ),
+            gameFirewallExceptionPackages = exceptions
         )
     }
 
     suspend fun getSettings(): KaaoSettings = settingsFlow.first()
+
+    suspend fun setOnboardingCompleted(completed: Boolean) {
+        dataStore.edit { it[KEY_ONBOARDING_COMPLETED] = completed }
+    }
+
+    suspend fun setBiometricLockEnabled(enabled: Boolean) {
+        dataStore.edit { it[KEY_BIOMETRIC_LOCK] = enabled }
+    }
+
+    suspend fun setAutoScanInterval(interval: AutoScanInterval) {
+        dataStore.edit { it[KEY_AUTO_SCAN_INTERVAL] = interval.id }
+    }
+
+    suspend fun updateLastAutoScanMillis(epochMillis: Long) {
+        dataStore.edit { it[KEY_LAST_AUTO_SCAN_MS] = epochMillis }
+    }
 
     suspend fun setRealtimeShieldEnabled(enabled: Boolean) {
         dataStore.edit { it[KEY_REALTIME_SHIELD] = enabled }
@@ -151,6 +188,21 @@ class KaaoPreferencesRepository @Inject constructor(
         }
     }
 
+    suspend fun setGameFirewallExceptionPackages(packages: Set<String>) {
+        dataStore.edit { it[KEY_GB_FIREWALL_EXCEPTIONS] = packages }
+    }
+
+    suspend fun toggleGameFirewallException(packageName: String) {
+        dataStore.edit { prefs ->
+            val current = prefs[KEY_GB_FIREWALL_EXCEPTIONS] ?: KaaoSettings.DEFAULT_VOICE_CHAT_PACKAGES
+            prefs[KEY_GB_FIREWALL_EXCEPTIONS] = if (packageName in current) {
+                current - packageName
+            } else {
+                current + packageName
+            }
+        }
+    }
+
     suspend fun saveSystemSnapshot(snapshot: SavedSystemSnapshot) {
         dataStore.edit { prefs ->
             prefs[KEY_SNAP_ACTIVE] = snapshot.hasActiveSnapshot
@@ -191,6 +243,10 @@ class KaaoPreferencesRepository @Inject constructor(
     }
 
     companion object {
+        private val KEY_ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
+        private val KEY_BIOMETRIC_LOCK = booleanPreferencesKey("biometric_lock_enabled")
+        private val KEY_AUTO_SCAN_INTERVAL = stringPreferencesKey("auto_scan_interval")
+        private val KEY_LAST_AUTO_SCAN_MS = longPreferencesKey("last_auto_scan_millis")
         private val KEY_REALTIME_SHIELD = booleanPreferencesKey("realtime_shield_enabled")
         private val KEY_DOWNLOADS_OBSERVER = booleanPreferencesKey("downloads_observer_enabled")
         private val KEY_DELTA_AUDIT = booleanPreferencesKey("delta_package_audit_enabled")
@@ -209,6 +265,7 @@ class KaaoPreferencesRepository @Inject constructor(
         private val KEY_GB_BRIGHTNESS_PCT = intPreferencesKey("gb_brightness_pct")
         private val KEY_GB_PAUSE_SYNC = booleanPreferencesKey("gb_pause_sync")
         private val KEY_GB_HUD = booleanPreferencesKey("gb_hud")
+        private val KEY_GB_FIREWALL_EXCEPTIONS = stringSetPreferencesKey("gb_firewall_exceptions")
 
         private val KEY_SNAP_ACTIVE = booleanPreferencesKey("snap_active")
         private val KEY_SNAP_PKG = stringPreferencesKey("snap_pkg")

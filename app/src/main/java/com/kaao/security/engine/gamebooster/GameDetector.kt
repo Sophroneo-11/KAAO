@@ -99,4 +99,55 @@ class GameDetector @Inject constructor(
             )
         )
     }
+
+    suspend fun loadFirewallExceptionCandidates(
+        selectedPackages: Set<String>
+    ): List<com.kaao.security.domain.model.FirewallExceptionApp> = withContext(Dispatchers.IO) {
+        val pm = context.packageManager
+        val installed = runCatching {
+            pm.getInstalledApplications(PackageManager.GET_META_DATA)
+        }.getOrDefault(emptyList())
+
+        installed.mapNotNull { app ->
+            if (app.packageName == context.packageName) return@mapNotNull null
+            if (pm.getLaunchIntentForPackage(app.packageName) == null) return@mapNotNull null
+            val isVoiceChat = isKnownVoiceChatPackage(app.packageName)
+            val isUserApp = (app.flags and ApplicationInfo.FLAG_SYSTEM) == 0
+            if (!isVoiceChat && !isUserApp && app.packageName !in selectedPackages) {
+                return@mapNotNull null
+            }
+            val label = runCatching { pm.getApplicationLabel(app).toString() }.getOrDefault(app.packageName)
+            com.kaao.security.domain.model.FirewallExceptionApp(
+                packageName = app.packageName,
+                appName = label,
+                isVoiceChatRecommended = isVoiceChat,
+                isSelected = app.packageName in selectedPackages
+            )
+        }.sortedWith(
+            compareByDescending<com.kaao.security.domain.model.FirewallExceptionApp> { it.isVoiceChatRecommended }
+                .thenByDescending { it.isSelected }
+                .thenBy { it.appName.lowercase() }
+        )
+    }
+
+    companion object {
+        val KNOWN_VOICE_CHAT_PACKAGES = setOf(
+            "com.discord",
+            "com.whatsapp",
+            "com.whatsapp.w4b",
+            "org.telegram.messenger",
+            "org.telegram.plus",
+            "org.thoughtcrime.securesms", // Signal
+            "com.teamspeak.ts3client",
+            "com.skype.raider",
+            "com.viber.voip",
+            "jp.naver.line.android",
+            "com.facebook.orca", // Messenger
+            "us.zoom.videomeetings",
+            "com.google.android.apps.tachyon" // Meet
+        )
+
+        fun isKnownVoiceChatPackage(packageName: String): Boolean =
+            packageName in KNOWN_VOICE_CHAT_PACKAGES
+    }
 }

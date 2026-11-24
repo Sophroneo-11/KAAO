@@ -15,8 +15,8 @@ android {
         applicationId = "com.kaao.security"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -106,6 +106,8 @@ ksp {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.fragment.ktx)
+    implementation(libs.androidx.biometric)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)

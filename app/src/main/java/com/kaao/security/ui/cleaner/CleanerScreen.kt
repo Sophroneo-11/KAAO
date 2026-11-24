@@ -59,6 +59,7 @@ import com.kaao.security.core.util.ByteFormatters
 import com.kaao.security.domain.model.AppStorageInfo
 import com.kaao.security.domain.model.CleanableItem
 import com.kaao.security.domain.model.CleanerCategory
+import com.kaao.security.ui.components.CyberGradientButton
 import com.kaao.security.ui.components.PermissionRationaleBanner
 import com.kaao.security.ui.components.SecurityCard
 import com.kaao.security.ui.components.StatusTag
@@ -118,7 +119,7 @@ fun CleanerScreen(
         ) {
             // Storage Overview & Scan Button
             item {
-                SecurityCard {
+                SecurityCard(borderColor = KaaoColors.CleanerCobalt.copy(alpha = 0.55f)) {
                     val usedBytes = (state.totalStorageBytes - state.availableStorageBytes).coerceAtLeast(0L)
                     val usedFraction = if (state.totalStorageBytes > 0L) {
                         (usedBytes.toDouble() / state.totalStorageBytes.toDouble()).toFloat().coerceIn(0f, 1f)
@@ -134,7 +135,7 @@ fun CleanerScreen(
                             Text(
                                 text = "Deep Storage Cleaner",
                                 style = MaterialTheme.typography.titleMedium,
-                                color = KaaoColors.TextPrimary
+                                color = KaaoColors.CleanerCyan
                             )
                             Text(
                                 text = if (state.totalStorageBytes > 0L) {
@@ -153,7 +154,7 @@ fun CleanerScreen(
                         }
                         StatusTag(
                             label = modeLabel,
-                            accent = if (modeLabel == "All Files") KaaoColors.CyberEmerald else KaaoColors.WarningAmber
+                            accent = if (modeLabel == "All Files") KaaoColors.CleanerCyan else KaaoColors.WarningAmber
                         )
                     }
 
@@ -165,35 +166,23 @@ fun CleanerScreen(
                                 .fillMaxWidth()
                                 .height(8.dp)
                                 .clip(RoundedCornerShape(4.dp)),
-                            color = if (usedFraction > 0.85f) KaaoColors.ThreatCrimson else KaaoColors.ShieldCyan,
+                            color = if (usedFraction > 0.85f) KaaoColors.ThreatCrimson else KaaoColors.CleanerCobalt,
                             trackColor = KaaoColors.SurfaceElevated
                         )
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
-                    Button(
-                        onClick = { viewModel.startStorageScan() },
-                        enabled = !state.isScanning,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = KaaoColors.CyberEmerald,
-                            contentColor = KaaoColors.ObsidianBg
-                        )
-                    ) {
-                        if (state.isScanning) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                strokeWidth = 2.dp,
-                                color = KaaoColors.ObsidianBg
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Running 3-Stage SHA-256 Scan...", fontWeight = FontWeight.Bold)
+                    CyberGradientButton(
+                        text = if (state.isScanning) {
+                            "Running 3-Stage SHA-256 Scan..."
                         } else {
-                            Icon(Icons.Outlined.CleaningServices, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Analyze Storage & Duplicates", fontWeight = FontWeight.Bold)
-                        }
-                    }
+                            "Analyze Storage & Duplicates"
+                        },
+                        icon = Icons.Outlined.CleaningServices,
+                        brush = KaaoColors.CleanerGradient,
+                        isLoading = state.isScanning,
+                        onClick = { viewModel.startStorageScan() }
+                    )
                 }
             }
 

@@ -3,6 +3,7 @@ package com.kaao.security.ui.webshield
 import android.app.Activity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -13,19 +14,19 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.VpnLock
 import androidx.compose.material.icons.outlined.Wifi
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -37,7 +38,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -48,8 +51,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kaao.security.core.util.ByteFormatters
+import com.kaao.security.data.local.db.DnsBlockRuleEntity
 import com.kaao.security.domain.model.AegisVpnMode
 import com.kaao.security.domain.model.DohProvider
+import com.kaao.security.ui.components.CyberGradientButton
 import com.kaao.security.ui.components.SectionHeader
 import com.kaao.security.ui.components.SecurityCard
 import com.kaao.security.ui.components.StatusTag
@@ -62,6 +67,11 @@ fun WebShieldScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     var customDomainInput by rememberSaveable { mutableStateOf("") }
+    var ruleSearchQuery by rememberSaveable { mutableStateOf("") }
+    var ruleFilterTab by rememberSaveable { mutableIntStateOf(0) } // 0 = All, 1 = Block, 2 = Allow
+    var editingRule by remember { mutableStateOf<DnsBlockRuleEntity?>(null) }
+    var editDomainDraft by rememberSaveable { mutableStateOf("") }
+    var editIsAllow by rememberSaveable { mutableStateOf(false) }
 
     val vpnConsentLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
@@ -73,15 +83,26 @@ fun WebShieldScreen(
 
     val isDnsActive = state.vpnState.mode == AegisVpnMode.DNS_SHIELD
 
+    val filteredCustomRules = state.customRules.filter { rule ->
+        val matchesTab = when (ruleFilterTab) {
+            1 -> rule.category != "CUSTOM_ALLOW"
+            2 -> rule.category == "CUSTOM_ALLOW"
+            else -> true
+        }
+        val matchesQuery = ruleSearchQuery.isBlank() ||
+            rule.domain.contains(ruleSearchQuery.trim(), ignoreCase = true)
+        matchesTab && matchesQuery
+    }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // Aegis Zero-Root DNS Shield Master Card
+        // Aegis Zero-Root DNS Shield Master Card (Cyber Cyan theme)
         item {
             SecurityCard(
-                borderColor = if (isDnsActive) KaaoColors.CyberEmerald else KaaoColors.SurfaceBorder
+                borderColor = if (isDnsActive) KaaoColors.ShieldCyan else KaaoColors.ShieldCyan.copy(alpha = 0.35f)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -92,14 +113,14 @@ fun WebShieldScreen(
                         Icon(
                             imageVector = Icons.Outlined.VpnLock,
                             contentDescription = null,
-                            tint = if (isDnsActive) KaaoColors.CyberEmerald else KaaoColors.ShieldCyan
+                            tint = KaaoColors.ShieldCyan
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
                                 text = "Aegis Zero-Root DoH Shield",
                                 style = MaterialTheme.typography.titleMedium,
-                                color = KaaoColors.TextPrimary
+                                color = KaaoColors.ShieldCyan
                             )
                             Text(
                                 text = "Split-routed RFC 8484 DNS-over-HTTPS sinkhole",
@@ -124,7 +145,7 @@ fun WebShieldScreen(
                         },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = KaaoColors.ObsidianBg,
-                            checkedTrackColor = KaaoColors.CyberEmerald
+                            checkedTrackColor = KaaoColors.ShieldCyan
                         )
                     )
                 }
@@ -136,7 +157,7 @@ fun WebShieldScreen(
                 ) {
                     StatusTag(
                         label = state.vpnState.mode.label,
-                        accent = if (isDnsActive) KaaoColors.CyberEmerald else KaaoColors.TextSecondary
+                        accent = if (isDnsActive) KaaoColors.ShieldCyan else KaaoColors.TextSecondary
                     )
                     Text(
                         text = "${state.vpnState.queriesProcessed} session • ${state.totalBlocked} total blocked",
@@ -146,6 +167,23 @@ fun WebShieldScreen(
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
+                if (!isDnsActive) {
+                    CyberGradientButton(
+                        text = "Activate Aegis DoH Shield",
+                        icon = Icons.Outlined.VpnLock,
+                        brush = KaaoColors.ShieldGradient,
+                        onClick = {
+                            val consent = viewModel.buildVpnConsentIntent()
+                            if (consent != null) {
+                                vpnConsentLauncher.launch(consent)
+                            } else {
+                                viewModel.startDnsShield()
+                            }
+                        }
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+
                 Text(
                     text = "Encrypted Upstream Resolver (Certificate-Pinned)",
                     style = MaterialTheme.typography.labelMedium,
@@ -164,7 +202,7 @@ fun WebShieldScreen(
 
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(
-                    text = "Sinkhole Filter Categories",
+                    text = "Sinkhole Filter Categories (${state.totalRuleCount} active rules)",
                     style = MaterialTheme.typography.labelMedium,
                     color = KaaoColors.TextSecondary
                 )
@@ -203,6 +241,170 @@ fun WebShieldScreen(
                         },
                         label = { Text("Adware & Trackers") }
                     )
+                }
+            }
+        }
+
+        // Persistent SQLCipher Custom DNS Block/Allow Rules Editor
+        item {
+            SecurityCard(borderColor = KaaoColors.ShieldSky.copy(alpha = 0.45f)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Custom DNS Rules Editor",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = KaaoColors.TextPrimary
+                    )
+                    StatusTag("SQLCipher AES-256", KaaoColors.ShieldCyan)
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Persistent encrypted block/allow overrides applied immediately to the lock-free DNS matcher.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = KaaoColors.TextSecondary
+                )
+
+                if (!state.ruleFeedback.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = state.ruleFeedback.orEmpty(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = KaaoColors.CyberEmerald,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(onClick = { viewModel.clearRuleFeedback() }) { Text("OK") }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = customDomainInput,
+                    onValueChange = { customDomainInput = it },
+                    placeholder = { Text("tracker.example.com") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            viewModel.addCustomRule(customDomainInput, allow = false)
+                            customDomainInput = ""
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = KaaoColors.ThreatCrimson)
+                    ) {
+                        Text("Block Domain")
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            viewModel.addCustomRule(customDomainInput, allow = true)
+                            customDomainInput = ""
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Allow Domain")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { viewModel.applyTelemetryPreset() }) {
+                        Text("+ Telemetry Preset", style = MaterialTheme.typography.labelSmall)
+                    }
+                    OutlinedButton(onClick = { viewModel.applyCryptoMinerPreset() }) {
+                        Text("+ Crypto-Miner Preset", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+
+                if (state.customRules.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = ruleSearchQuery,
+                        onValueChange = { ruleSearchQuery = it },
+                        placeholder = { Text("Search ${state.customRules.size} custom rule(s)...") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = ruleFilterTab == 0,
+                            onClick = { ruleFilterTab = 0 },
+                            label = { Text("All (${state.customRules.size})") }
+                        )
+                        FilterChip(
+                            selected = ruleFilterTab == 1,
+                            onClick = { ruleFilterTab = 1 },
+                            label = { Text("Blocked (${state.customRules.count { it.category != "CUSTOM_ALLOW" }})") }
+                        )
+                        FilterChip(
+                            selected = ruleFilterTab == 2,
+                            onClick = { ruleFilterTab = 2 },
+                            label = { Text("Allowed (${state.customRules.count { it.category == "CUSTOM_ALLOW" }})") }
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    filteredCustomRules.forEach { rule ->
+                        val isAllow = rule.category == "CUSTOM_ALLOW"
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                StatusTag(
+                                    label = if (isAllow) "ALLOW" else "BLOCK",
+                                    accent = if (isAllow) KaaoColors.CyberEmerald else KaaoColors.ThreatCrimson,
+                                    modifier = Modifier.clickable {
+                                        viewModel.toggleCustomRuleMode(rule)
+                                    }
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = rule.domain,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = KaaoColors.TextPrimary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    editingRule = rule
+                                    editDomainDraft = rule.domain
+                                    editIsAllow = isAllow
+                                }
+                            ) {
+                                Icon(
+                                    Icons.Outlined.Edit,
+                                    contentDescription = "Edit rule",
+                                    tint = KaaoColors.ShieldCyan
+                                )
+                            }
+                            IconButton(onClick = { viewModel.removeCustomRule(rule.domain) }) {
+                                Icon(
+                                    Icons.Outlined.Close,
+                                    contentDescription = "Remove rule",
+                                    tint = KaaoColors.TextMuted
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -303,74 +505,6 @@ fun WebShieldScreen(
             }
         }
 
-        // Custom Domain Block / Allow Rules
-        item {
-            SecurityCard {
-                SectionHeader(title = "Custom Domain Rules")
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = customDomainInput,
-                    onValueChange = { customDomainInput = it },
-                    placeholder = { Text("example.com") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Button(
-                        onClick = {
-                            viewModel.addCustomRule(customDomainInput, allow = false)
-                            customDomainInput = ""
-                        },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(containerColor = KaaoColors.ThreatCrimson)
-                    ) {
-                        Text("Block Domain")
-                    }
-                    OutlinedButton(
-                        onClick = {
-                            viewModel.addCustomRule(customDomainInput, allow = true)
-                            customDomainInput = ""
-                        },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Allow Domain")
-                    }
-                }
-                if (state.customRules.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    state.customRules.forEach { rule ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                                StatusTag(
-                                    label = if (rule.category == "CUSTOM_ALLOW") "ALLOW" else "BLOCK",
-                                    accent = if (rule.category == "CUSTOM_ALLOW") KaaoColors.CyberEmerald else KaaoColors.ThreatCrimson
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = rule.domain,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = KaaoColors.TextPrimary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                            IconButton(onClick = { viewModel.removeCustomRule(rule.domain) }) {
-                                Icon(Icons.Outlined.Close, contentDescription = "Remove rule", tint = KaaoColors.TextMuted)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
         // Live DNS Query Log
         item {
             Row(
@@ -378,10 +512,9 @@ fun WebShieldScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Live DNS Query Log (${state.recentQueries.size})",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = KaaoColors.TextPrimary
+                SectionHeader(
+                    title = "Live DNS Query Log (${state.recentQueries.size})",
+                    modifier = Modifier.weight(1f)
                 )
                 if (state.recentQueries.isNotEmpty()) {
                     TextButton(onClick = { viewModel.clearLogs() }) {
@@ -444,5 +577,54 @@ fun WebShieldScreen(
                 }
             }
         }
+    }
+
+    // Edit Custom DNS Rule Modal
+    editingRule?.let { target ->
+        AlertDialog(
+            onDismissRequest = { editingRule = null },
+            containerColor = KaaoColors.SurfaceDark,
+            title = { Text("Edit Custom DNS Rule", color = KaaoColors.ShieldCyan) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = editDomainDraft,
+                        onValueChange = { editDomainDraft = it },
+                        singleLine = true,
+                        label = { Text("Domain") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = !editIsAllow,
+                            onClick = { editIsAllow = false },
+                            label = { Text("Block (Sinkhole)") }
+                        )
+                        FilterChip(
+                            selected = editIsAllow,
+                            onClick = { editIsAllow = true },
+                            label = { Text("Allow (Override)") }
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.updateCustomRule(target.domain, editDomainDraft, editIsAllow)
+                        editingRule = null
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = KaaoColors.ShieldCyan,
+                        contentColor = KaaoColors.ObsidianBg
+                    )
+                ) {
+                    Text("Save Rule")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingRule = null }) { Text("Cancel") }
+            }
+        )
     }
 }

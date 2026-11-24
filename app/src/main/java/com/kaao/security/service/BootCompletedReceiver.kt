@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import com.kaao.security.data.local.prefs.KaaoPreferencesRepository
 import com.kaao.security.worker.DeltaPackageAuditWorker
+import com.kaao.security.worker.ScheduledAutoScanWorker
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -29,6 +30,7 @@ class BootCompletedReceiver : BroadcastReceiver() {
                 if (settings.deltaPackageAuditEnabled) {
                     DeltaPackageAuditWorker.schedulePeriodic(context)
                 }
+                ScheduledAutoScanWorker.applySchedule(context, settings.autoScanInterval)
                 if (settings.realtimeShieldEnabled) {
                     runCatching { RealtimeMonitorService.start(context) }
                 }

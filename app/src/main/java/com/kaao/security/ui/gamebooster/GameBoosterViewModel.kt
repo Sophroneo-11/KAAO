@@ -7,6 +7,7 @@ import com.kaao.security.core.permission.PermissionManager
 import com.kaao.security.core.permission.PermissionStatusSnapshot
 import com.kaao.security.data.local.prefs.KaaoPreferencesRepository
 import com.kaao.security.domain.model.DeviceTelemetry
+import com.kaao.security.domain.model.FirewallExceptionApp
 import com.kaao.security.domain.model.GameApp
 import com.kaao.security.domain.model.GameBoostConfig
 import com.kaao.security.domain.model.GameSessionState
@@ -28,6 +29,8 @@ data class GameBoosterUiState(
     val session: GameSessionState = GameSessionState(),
     val games: List<GameApp> = emptyList(),
     val launchableApps: List<GameApp> = emptyList(),
+    val firewallExceptionPackages: Set<String> = emptySet(),
+    val firewallExceptionCandidates: List<FirewallExceptionApp> = emptyList(),
     val permissions: PermissionStatusSnapshot? = null
 )
 
@@ -42,6 +45,7 @@ class GameBoosterViewModel @Inject constructor(
 
     private val gamesFlow = MutableStateFlow<List<GameApp>>(emptyList())
     private val allAppsFlow = MutableStateFlow<List<GameApp>>(emptyList())
+    private val exceptionCandidatesFlow = MutableStateFlow<List<FirewallExceptionApp>>(emptyList())
     private val permsFlow = MutableStateFlow(permissionManager.getSnapshot())
 
     private val baseFlow = combine(
@@ -49,21 +53,26 @@ class GameBoosterViewModel @Inject constructor(
         prefs.settingsFlow,
         gameSessionManager.sessionState
     ) { telemetry, settings, session ->
-        Triple(telemetry, settings.gameBoostConfig, session)
+        Triple(telemetry, settings, session)
     }
 
     val uiState: StateFlow<GameBoosterUiState> = combine(
         baseFlow,
         gamesFlow,
         allAppsFlow,
+        exceptionCandidatesFlow,
         permsFlow
-    ) { (telemetry, config, session), games, allApps, perms ->
+    ) { (telemetry, settings, session), games, allApps, candidates, perms ->
+        val selected = settings.gameFirewallExceptionPackages
+        val syncedCandidates = candidates.map { it.copy(isSelected = it.packageName in selected) }
         GameBoosterUiState(
             telemetry = telemetry,
-            config = config,
+            config = settings.gameBoostConfig,
             session = session,
             games = games,
             launchableApps = allApps,
+            firewallExceptionPackages = selected,
+            firewallExceptionCandidates = syncedCandidates,
             permissions = perms
         )
     }.stateIn(
@@ -80,12 +89,27 @@ class GameBoosterViewModel @Inject constructor(
         permsFlow.value = permissionManager.getSnapshot()
         viewModelScope.launch {
             gamesFlow.value = gameDetector.loadGameLibrary()
+            val selected = prefs.getSettings().gameFirewallExceptionPackages
+            exceptionCandidatesFlow.value = gameDetector.loadFirewallExceptionCandidates(selected)
         }
     }
 
     fun loadAllLaunchableAppsForPicker() {
         viewModelScope.launch {
             allAppsFlow.value = gameDetector.loadAllLaunchableApps()
+        }
+    }
+
+    fun loadFirewallExceptionCandidates() {
+        viewModelScope.launch {
+            val selected = prefs.getSettings().gameFirewallExceptionPackages
+            exceptionCandidatesFlow.value = gameDetector.loadFirewallExceptionCandidates(selected)
+        }
+    }
+
+    fun toggleFirewallException(packageName: String) {
+        viewModelScope.launch {
+            prefs.toggleGameFirewallException(packageName)
         }
     }
 

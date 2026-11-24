@@ -128,7 +128,8 @@ class GameSessionManager @Inject constructor(
 
         var appliedFirewall = false
         if (config.enableBackgroundFirewall && permissionManager.isVpnConsentGranted()) {
-            vpnController.startGameFirewall(game.packageName, game.appName)
+            val exceptions = prefs.getSettings().gameFirewallExceptionPackages
+            vpnController.startGameFirewall(game.packageName, game.appName, exceptions)
             appliedFirewall = true
         }
 

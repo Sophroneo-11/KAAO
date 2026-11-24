@@ -6,6 +6,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -19,17 +21,20 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.HeadsetMic
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Restore
 import androidx.compose.material.icons.outlined.SportsEsports
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -42,6 +47,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -49,6 +55,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kaao.security.core.util.ByteFormatters
 import com.kaao.security.domain.model.GameApp
+import com.kaao.security.ui.components.CyberGradientButton
 import com.kaao.security.ui.components.SectionHeader
 import com.kaao.security.ui.components.SecurityCard
 import com.kaao.security.ui.components.SeverityPill
@@ -56,6 +63,7 @@ import com.kaao.security.ui.components.StatusTag
 import com.kaao.security.ui.theme.KaaoColors
 import java.util.Locale
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun GameBoosterScreen(
     viewModel: GameBoosterViewModel = hiltViewModel()
@@ -64,6 +72,7 @@ fun GameBoosterScreen(
     val context = LocalContext.current
 
     var showAddGameDialog by rememberSaveable { mutableStateOf(false) }
+    var showExceptionsPickerDialog by rememberSaveable { mutableStateOf(false) }
     var pendingGameLaunch by remember { mutableStateOf<GameApp?>(null) }
 
     val vpnConsentLauncher = rememberLauncherForActivityResult(
@@ -86,13 +95,13 @@ fun GameBoosterScreen(
         if (state.session.isActive) {
             item {
                 SecurityCard(
-                    borderColor = KaaoColors.BoosterViolet,
-                    containerColor = KaaoColors.BoosterVioletContainer.copy(alpha = 0.45f)
+                    borderColor = KaaoColors.BoosterMagenta,
+                    containerColor = KaaoColors.BoosterVioletContainer.copy(alpha = 0.5f)
                 ) {
                     Text(
                         text = "Boosted Session Active: ${state.session.activeGameName}",
                         style = MaterialTheme.typography.titleMedium,
-                        color = KaaoColors.BoosterViolet
+                        color = KaaoColors.BoosterMagenta
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
@@ -101,24 +110,20 @@ fun GameBoosterScreen(
                         color = KaaoColors.TextPrimary
                     )
                     Spacer(modifier = Modifier.height(10.dp))
-                    Button(
-                        onClick = { viewModel.endSessionAndRestore() },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = KaaoColors.CyberEmerald,
-                            contentColor = KaaoColors.ObsidianBg
-                        )
-                    ) {
-                        Icon(Icons.Outlined.Restore, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Restore All System Settings", fontWeight = FontWeight.Bold)
-                    }
+                    CyberGradientButton(
+                        text = "Restore All System Settings",
+                        icon = Icons.Outlined.Restore,
+                        brush = KaaoColors.BoosterGradient,
+                        contentColor = KaaoColors.TextPrimary,
+                        onClick = { viewModel.endSessionAndRestore() }
+                    )
                 }
             }
         }
 
         // Live Device Telemetry Strip
         item {
-            SecurityCard {
+            SecurityCard(borderColor = KaaoColors.BoosterViolet.copy(alpha = 0.5f)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -127,7 +132,7 @@ fun GameBoosterScreen(
                     Text(
                         text = "Live Hardware & Network Telemetry",
                         style = MaterialTheme.typography.titleMedium,
-                        color = KaaoColors.TextPrimary
+                        color = KaaoColors.BoosterViolet
                     )
                     SeverityPill(
                         label = state.telemetry.thermalStatusLabel,
@@ -152,7 +157,7 @@ fun GameBoosterScreen(
                     TelemetryCell(
                         label = "RAM USED",
                         value = "${state.telemetry.ramUsagePercent}%",
-                        accent = KaaoColors.BoosterViolet
+                        accent = KaaoColors.BoosterMagenta
                     )
                     TelemetryCell(
                         label = "BATTERY",
@@ -171,15 +176,94 @@ fun GameBoosterScreen(
             }
         }
 
+        // Voice-Chat & Companion Firewall Exceptions Picker Card
+        item {
+            SecurityCard(borderColor = KaaoColors.BoosterMagenta.copy(alpha = 0.45f)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                        Icon(
+                            imageVector = Icons.Outlined.HeadsetMic,
+                            contentDescription = null,
+                            tint = KaaoColors.BoosterMagenta
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = "Voice-Chat Firewall Exceptions",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = KaaoColors.TextPrimary
+                            )
+                            Text(
+                                text = "Keep Discord, WhatsApp, Telegram & squad apps unblocked during Game Mode Firewall",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = KaaoColors.TextSecondary
+                            )
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            viewModel.loadFirewallExceptionCandidates()
+                            showExceptionsPickerDialog = true
+                        }
+                    ) {
+                        Text("Pick")
+                    }
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+                val selectedApps = state.firewallExceptionCandidates.filter { it.isSelected }
+                if (state.firewallExceptionPackages.isEmpty()) {
+                    Text(
+                        text = "Strict mode: Only the active game bypasses the firewall.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = KaaoColors.TextMuted
+                    )
+                } else {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        if (selectedApps.isNotEmpty()) {
+                            selectedApps.forEach { app ->
+                                StatusTag(
+                                    label = "${app.appName} ✕",
+                                    accent = KaaoColors.BoosterMagenta,
+                                    modifier = Modifier.clickable {
+                                        viewModel.toggleFirewallException(app.packageName)
+                                    }
+                                )
+                            }
+                        } else {
+                            state.firewallExceptionPackages.forEach { pkg ->
+                                StatusTag(
+                                    label = "${pkg.substringAfterLast('.')} ✕",
+                                    accent = KaaoColors.BoosterViolet,
+                                    modifier = Modifier.clickable {
+                                        viewModel.toggleFirewallException(pkg)
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // Reversible Pre-Launch Checklist
         item {
             SecurityCard {
-                SectionHeader(title = "Reversible Pre-Launch Checklist")
+                SectionHeader(
+                    title = "Reversible Pre-Launch Checklist",
+                    accentColor = KaaoColors.BoosterViolet
+                )
                 Spacer(modifier = Modifier.height(10.dp))
 
                 ChecklistToggleRow(
                     title = "Aegis Background Bandwidth Firewall",
-                    subtitle = "Zero-root VPN excludes active game via addDisallowedApplication() and blocks background hogs",
+                    subtitle = "Zero-root VPN excludes active game + ${state.firewallExceptionPackages.size} voice-chat exception(s)",
                     checked = state.config.enableBackgroundFirewall,
                     permissionMissingLabel = if (state.permissions?.vpnConsentGranted == false) "Prompt on launch" else null,
                     onCheckedChange = { enabled ->
@@ -216,7 +300,11 @@ fun GameBoosterScreen(
                         onValueChange = { value ->
                             viewModel.updateConfig { it.copy(targetBrightnessPercent = value.toInt()) }
                         },
-                        valueRange = 20f..100f
+                        valueRange = 20f..100f,
+                        colors = SliderDefaults.colors(
+                            thumbColor = KaaoColors.BoosterMagenta,
+                            activeTrackColor = KaaoColors.BoosterViolet
+                        )
                     )
                 }
                 HorizontalDivider(color = KaaoColors.SurfaceBorder)
@@ -296,7 +384,10 @@ fun GameBoosterScreen(
             }
         } else {
             items(state.games, key = { it.packageName }) { game ->
-                SecurityCard(containerColor = KaaoColors.SurfaceElevated) {
+                SecurityCard(
+                    borderColor = KaaoColors.BoosterViolet.copy(alpha = 0.35f),
+                    containerColor = KaaoColors.SurfaceElevated
+                ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -316,7 +407,7 @@ fun GameBoosterScreen(
                                 )
                                 if (game.isAutoDetected) {
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    StatusTag("CATEGORY_GAME", KaaoColors.BoosterViolet)
+                                    StatusTag("CATEGORY_GAME", KaaoColors.BoosterMagenta)
                                 }
                             }
                         }
@@ -348,6 +439,73 @@ fun GameBoosterScreen(
         }
     }
 
+    // Voice-Chat & Companion Firewall Exceptions Picker Modal
+    if (showExceptionsPickerDialog) {
+        AlertDialog(
+            onDismissRequest = { showExceptionsPickerDialog = false },
+            containerColor = KaaoColors.SurfaceDark,
+            title = {
+                Text(
+                    text = "Voice-Chat Firewall Exceptions",
+                    color = KaaoColors.BoosterMagenta
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Checked apps bypass the Game Mode background firewall via addDisallowedApplication().",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = KaaoColors.TextSecondary
+                    )
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 320.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(state.firewallExceptionCandidates, key = { it.packageName }) { app ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { viewModel.toggleFirewallException(app.packageName) }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = app.isSelected,
+                                    onCheckedChange = { viewModel.toggleFirewallException(app.packageName) }
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = app.appName,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = KaaoColors.TextPrimary
+                                        )
+                                        if (app.isVoiceChatRecommended) {
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            StatusTag("Voice Chat", KaaoColors.BoosterMagenta)
+                                        }
+                                    }
+                                    Text(
+                                        text = app.packageName,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = KaaoColors.TextMuted
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showExceptionsPickerDialog = false }) {
+                    Text("Done", color = KaaoColors.CyberEmerald)
+                }
+            }
+        )
+    }
+
     if (showAddGameDialog) {
         AlertDialog(
             onDismissRequest = { showAddGameDialog = false },
@@ -375,7 +533,7 @@ fun GameBoosterScreen(
                                 Text(app.appName, color = KaaoColors.TextPrimary, style = MaterialTheme.typography.bodyMedium)
                                 Text(app.packageName, color = KaaoColors.TextMuted, style = MaterialTheme.typography.labelSmall)
                             }
-                            Text("Add", color = KaaoColors.CyberEmerald, style = MaterialTheme.typography.labelMedium)
+                            Text("Add", color = KaaoColors.BoosterMagenta, style = MaterialTheme.typography.labelMedium)
                         }
                     }
                 }
@@ -391,7 +549,7 @@ fun GameBoosterScreen(
 private fun TelemetryCell(
     label: String,
     value: String,
-    accent: androidx.compose.ui.graphics.Color
+    accent: Color
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(

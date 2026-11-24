@@ -283,3 +283,24 @@ data class SmartScanState(
     val summaryMessage: String = "Ready to run a concurrent full-device security check",
     val lastCompletedMillis: Long = 0L
 )
+
+enum class AutoScanInterval(val id: String, val label: String, val intervalHours: Long) {
+    OFF("off", "Off", 0L),
+    EVERY_6_HOURS("6h", "Every 6h", 6L),
+    EVERY_12_HOURS("12h", "Every 12h", 12L),
+    DAILY("24h", "Daily", 24L),
+    WEEKLY("168h", "Weekly", 168L);
+
+    companion object {
+        fun fromId(id: String?): AutoScanInterval =
+            entries.firstOrNull { it.id == id } ?: DAILY
+    }
+}
+
+data class FirewallExceptionApp(
+    val packageName: String,
+    val appName: String,
+    val isVoiceChatRecommended: Boolean,
+    val isSelected: Boolean
+)
+

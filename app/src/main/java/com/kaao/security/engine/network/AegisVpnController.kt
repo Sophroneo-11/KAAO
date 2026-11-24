@@ -65,10 +65,8 @@ class AegisVpnController @Inject constructor(
         _vpnState.update { it.copy(dohProvider = settings.dohProvider) }
     }
 
-    suspend fun addCustomRule(domain: String, allow: Boolean) = withContext(Dispatchers.IO) {
-        val clean = domain.trim().lowercase().removePrefix("https://").removePrefix("http://")
-            .substringBefore('/').trimEnd('.')
-        if (clean.isBlank() || !clean.contains('.')) return@withContext
+    suspend fun addCustomRule(domain: String, allow: Boolean): Boolean = withContext(Dispatchers.IO) {
+        val clean = normalizeDomain(domain) ?: return@withContext false
         blockRuleDao.upsert(
             DnsBlockRuleEntity(
                 domain = clean,
@@ -78,11 +76,62 @@ class AegisVpnController @Inject constructor(
             )
         )
         reloadMatcherRules()
+        true
+    }
+
+    suspend fun updateCustomRule(oldDomain: String, newDomain: String, allow: Boolean): Boolean =
+        withContext(Dispatchers.IO) {
+            val cleanNew = normalizeDomain(newDomain) ?: return@withContext false
+            val cleanOld = oldDomain.trim().lowercase()
+            if (cleanOld != cleanNew) {
+                blockRuleDao.deleteByDomain(cleanOld)
+            }
+            blockRuleDao.upsert(
+                DnsBlockRuleEntity(
+                    domain = cleanNew,
+                    category = if (allow) "CUSTOM_ALLOW" else "CUSTOM_BLOCK",
+                    isUserCustom = true,
+                    addedAtMillis = System.currentTimeMillis()
+                )
+            )
+            reloadMatcherRules()
+            true
+        }
+
+    suspend fun toggleCustomRuleMode(domain: String, currentlyAllowed: Boolean) =
+        withContext(Dispatchers.IO) {
+            addCustomRule(domain, allow = !currentlyAllowed)
+        }
+
+    suspend fun applyCustomBlockPreset(domains: List<String>) = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        val entities = domains.mapNotNull(::normalizeDomain).map { clean ->
+            DnsBlockRuleEntity(
+                domain = clean,
+                category = "CUSTOM_BLOCK",
+                isUserCustom = true,
+                addedAtMillis = now
+            )
+        }
+        if (entities.isNotEmpty()) {
+            blockRuleDao.upsertAll(entities)
+            reloadMatcherRules()
+        }
     }
 
     suspend fun removeCustomRule(domain: String) = withContext(Dispatchers.IO) {
         blockRuleDao.deleteByDomain(domain.lowercase())
         reloadMatcherRules()
+    }
+
+    private fun normalizeDomain(raw: String): String? {
+        val clean = raw.trim().lowercase()
+            .removePrefix("https://")
+            .removePrefix("http://")
+            .substringBefore('/')
+            .substringBefore(':')
+            .trimEnd('.')
+        return if (clean.isNotBlank() && clean.contains('.') && !clean.contains(' ')) clean else null
     }
 
     suspend fun clearQueryLogs() = withContext(Dispatchers.IO) {
@@ -97,11 +146,19 @@ class AegisVpnController @Inject constructor(
         ContextCompat.startForegroundService(context, intent)
     }
 
-    fun startGameFirewall(gamePackage: String, gameName: String) {
+    fun startGameFirewall(
+        gamePackage: String,
+        gameName: String,
+        exceptionPackages: Set<String> = emptySet()
+    ) {
         val intent = Intent(context, AegisVpnService::class.java).apply {
             action = AegisVpnService.ACTION_START_GAME_FIREWALL
             putExtra(AegisVpnService.EXTRA_GAME_PACKAGE, gamePackage)
             putExtra(AegisVpnService.EXTRA_GAME_NAME, gameName)
+            putStringArrayListExtra(
+                AegisVpnService.EXTRA_EXCEPTION_PACKAGES,
+                ArrayList(exceptionPackages)
+            )
         }
         ContextCompat.startForegroundService(context, intent)
     }

@@ -1,7 +1,11 @@
 package com.kaao.security.ui.settings
 
+import android.content.Context
+import android.content.ContextWrapper
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,12 +16,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Fingerprint
 import androidx.compose.material.icons.outlined.Key
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -40,20 +48,26 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kaao.security.core.util.ByteFormatters
+import com.kaao.security.domain.model.AutoScanInterval
+import com.kaao.security.ui.components.CyberGradientButton
 import com.kaao.security.ui.components.SectionHeader
 import com.kaao.security.ui.components.SecurityCard
 import com.kaao.security.ui.components.StatusTag
 import com.kaao.security.ui.theme.KaaoColors
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
+    onReplayWelcome: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val fragmentActivity = context.findFragmentActivity()
     var vtKeyDraft by rememberSaveable { mutableStateOf("") }
     var showImportBundleDialog by rememberSaveable { mutableStateOf(false) }
     var bundleJsonDraft by rememberSaveable { mutableStateOf("") }
@@ -67,7 +81,7 @@ fun SettingsScreen(
             item {
                 SecurityCard(
                     borderColor = KaaoColors.CyberEmerald,
-                    containerColor = KaaoColors.CyberEmeraldContainer.copy(alpha = 0.35f)
+                    containerColor = KaaoColors.CyberEmeraldContainer.copy(alpha = 0.4f)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -81,6 +95,98 @@ fun SettingsScreen(
                             modifier = Modifier.weight(1f)
                         )
                         TextButton(onClick = { viewModel.clearBanner() }) { Text("OK") }
+                    }
+                }
+            }
+        }
+
+        // Hardware BiometricPrompt Security Lock Card
+        item {
+            SecurityCard(
+                borderColor = if (state.settings.biometricLockEnabled) {
+                    KaaoColors.CyberEmerald.copy(alpha = 0.6f)
+                } else {
+                    KaaoColors.SurfaceBorder
+                }
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                        Icon(
+                            imageVector = Icons.Outlined.Fingerprint,
+                            contentDescription = null,
+                            tint = KaaoColors.CyberEmerald
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "Biometric Security Lock",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = KaaoColors.TextPrimary
+                            )
+                            Text(
+                                text = "Require hardware biometrics or device PIN on launch to protect KAAO controls & SQLCipher vault",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = KaaoColors.TextSecondary
+                            )
+                        }
+                    }
+                    Switch(
+                        checked = state.settings.biometricLockEnabled,
+                        onCheckedChange = { enable ->
+                            viewModel.requestBiometricLockToggle(fragmentActivity, enable)
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = KaaoColors.ObsidianBg,
+                            checkedTrackColor = KaaoColors.CyberEmerald
+                        )
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                StatusTag(
+                    label = state.biometricCapabilityLabel,
+                    accent = if (state.biometricAvailable) KaaoColors.CyberEmerald else KaaoColors.WarningAmber
+                )
+            }
+        }
+
+        // Configurable Auto-Scan Schedule Card
+        item {
+            SecurityCard(borderColor = KaaoColors.AntivirusTeal.copy(alpha = 0.45f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Outlined.Schedule,
+                        contentDescription = null,
+                        tint = KaaoColors.AntivirusTeal
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text(
+                            text = "Configurable Auto-Scan Schedule",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = KaaoColors.TextPrimary
+                        )
+                        Text(
+                            text = "Battery-safe WorkManager antivirus & stalkerware scans • Last run: ${ByteFormatters.formatTimestamp(state.settings.lastAutoScanMillis)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = KaaoColors.TextSecondary
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    AutoScanInterval.entries.forEach { interval ->
+                        FilterChip(
+                            selected = state.settings.autoScanInterval == interval,
+                            onClick = { viewModel.selectAutoScanInterval(interval) },
+                            label = { Text(interval.label) }
+                        )
                     }
                 }
             }
@@ -181,14 +287,8 @@ fun SettingsScreen(
 
         // Threat Vault & Cryptography Integrity
         item {
-            SecurityCard {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    SectionHeader(title = "Encrypted Vault & Cryptography")
-                }
+            SecurityCard(borderColor = KaaoColors.ShieldCyan.copy(alpha = 0.4f)) {
+                SectionHeader(title = "Encrypted Vault & Cryptography")
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Outlined.VerifiedUser, contentDescription = null, tint = KaaoColors.CyberEmerald)
@@ -212,16 +312,11 @@ fun SettingsScreen(
                     }
                 }
                 Spacer(modifier = Modifier.height(10.dp))
-                Button(
-                    onClick = { viewModel.syncRemoteDefinitions() },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = KaaoColors.ShieldCyan,
-                        contentColor = KaaoColors.ObsidianBg
-                    )
-                ) {
-                    Text("Check Remote Signed Definitions (TLS + ECDSA)")
-                }
+                CyberGradientButton(
+                    text = "Check Remote Signed Definitions",
+                    brush = KaaoColors.ShieldGradient,
+                    onClick = { viewModel.syncRemoteDefinitions() }
+                )
                 Spacer(modifier = Modifier.height(6.dp))
                 OutlinedButton(
                     onClick = { viewModel.rebuildAndVerifyVault() },
@@ -316,6 +411,41 @@ fun SettingsScreen(
                 )
             }
         }
+
+        // Replay Animated Welcome Page Card
+        item {
+            SecurityCard {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                        Icon(
+                            imageVector = Icons.Outlined.AutoAwesome,
+                            contentDescription = null,
+                            tint = KaaoColors.BoosterViolet
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "KAAO Welcome Tour",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = KaaoColors.TextPrimary
+                            )
+                            Text(
+                                text = "Replay the animated KAAO capability overview & quick launch screen",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = KaaoColors.TextSecondary
+                            )
+                        }
+                    }
+                    OutlinedButton(onClick = onReplayWelcome) {
+                        Text("Replay")
+                    }
+                }
+            }
+        }
     }
 
     if (showImportBundleDialog) {
@@ -368,6 +498,12 @@ fun SettingsScreen(
             }
         )
     }
+}
+
+private tailrec fun Context.findFragmentActivity(): FragmentActivity? = when (this) {
+    is FragmentActivity -> this
+    is ContextWrapper -> baseContext.findFragmentActivity()
+    else -> null
 }
 
 @Composable

@@ -58,16 +58,23 @@ class AegisVpnService : VpnService() {
             ACTION_START_GAME_FIREWALL -> {
                 val gamePkg = intent.getStringExtra(EXTRA_GAME_PACKAGE)
                 val gameName = intent.getStringExtra(EXTRA_GAME_NAME) ?: gamePkg ?: "Active Game"
+                val exceptions = intent.getStringArrayListExtra(EXTRA_EXCEPTION_PACKAGES)?.toSet()
+                    ?: emptySet()
                 if (gamePkg.isNullOrBlank()) {
                     teardownTunnelAndStop()
                     return START_NOT_STICKY
                 }
+                val excLabel = if (exceptions.isNotEmpty()) {
+                    " + ${exceptions.size} voice/app exception(s)"
+                } else {
+                    ""
+                }
                 promoteToForeground(
                     title = "KAAO Game Firewall Active",
-                    subtitle = "Prioritizing $gameName • Background apps blocked"
+                    subtitle = "Prioritizing $gameName$excLabel • Background apps blocked"
                 )
                 serviceScope.launch {
-                    startGameFirewallTunnel(gamePkg, gameName)
+                    startGameFirewallTunnel(gamePkg, gameName, exceptions)
                 }
             }
 
@@ -155,7 +162,11 @@ class AegisVpnService : VpnService() {
         }
     }
 
-    private suspend fun startGameFirewallTunnel(activeGamePackage: String, gameName: String) {
+    private suspend fun startGameFirewallTunnel(
+        activeGamePackage: String,
+        gameName: String,
+        exceptionPackages: Set<String>
+    ) {
         closeTunnelInternal()
         val settings = prefs.getSettings()
 
@@ -168,9 +179,14 @@ class AegisVpnService : VpnService() {
             .addRoute("0.0.0.0", 0)
             .addRoute("::", 0)
 
-        // Exclude the active game + KAAO itself so the game bypasses the firewall completely
+        // Exclude the active game, KAAO itself, and user-approved voice-chat/companion apps
         runCatching { builder.addDisallowedApplication(activeGamePackage) }
         runCatching { builder.addDisallowedApplication(packageName) }
+        exceptionPackages.forEach { exceptionPkg ->
+            if (exceptionPkg.isNotBlank()) {
+                runCatching { builder.addDisallowedApplication(exceptionPkg) }
+            }
+        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             builder.setMetered(false)
@@ -284,6 +300,7 @@ class AegisVpnService : VpnService() {
         const val EXTRA_DOH_PROVIDER_ID = "extra_doh_provider_id"
         const val EXTRA_GAME_PACKAGE = "extra_game_package"
         const val EXTRA_GAME_NAME = "extra_game_name"
+        const val EXTRA_EXCEPTION_PACKAGES = "extra_exception_packages"
 
         private const val TUN_LOCAL_IPV4 = "10.111.222.1"
         private const val TUN_VIRTUAL_DNS_IPV4 = "10.111.222.2"

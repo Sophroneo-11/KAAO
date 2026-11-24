@@ -48,6 +48,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kaao.security.core.util.ByteFormatters
 import com.kaao.security.domain.model.StalkerwareFinding
 import com.kaao.security.domain.model.ThreatFinding
+import com.kaao.security.ui.components.CyberGradientButton
 import com.kaao.security.ui.components.SectionHeader
 import com.kaao.security.ui.components.SecurityCard
 import com.kaao.security.ui.components.SeverityPill
@@ -71,7 +72,7 @@ fun AntivirusScreen(
     ) {
         // Engine & Scan Controls Card
         item {
-            SecurityCard {
+            SecurityCard(borderColor = KaaoColors.AntivirusTeal.copy(alpha = 0.5f)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -81,12 +82,12 @@ fun AntivirusScreen(
                         Text(
                             text = "KAAO Antivirus & Heuristic Engine",
                             style = MaterialTheme.typography.titleMedium,
-                            color = KaaoColors.TextPrimary
+                            color = KaaoColors.CyberEmerald
                         )
                         Text(
                             text = "Bloom Filter (${state.signatureCount} vault sigs) • Def v${state.definitionVersion}",
                             style = MaterialTheme.typography.labelSmall,
-                            color = KaaoColors.ShieldCyan
+                            color = KaaoColors.AntivirusTeal
                         )
                     }
                     Icon(
@@ -128,21 +129,18 @@ fun AntivirusScreen(
                 }
 
                 Spacer(modifier = Modifier.height(14.dp))
+                CyberGradientButton(
+                    text = if (state.progress.isScanning) "Scanning Installed Apps..." else "Run Quick Antivirus Scan",
+                    icon = Icons.Outlined.GppGood,
+                    brush = KaaoColors.AntivirusGradient,
+                    isLoading = state.progress.isScanning,
+                    onClick = { viewModel.startQuickAppScan() }
+                )
+                Spacer(modifier = Modifier.height(8.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Button(
-                        onClick = { viewModel.startQuickAppScan() },
-                        enabled = !state.progress.isScanning,
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = KaaoColors.CyberEmerald,
-                            contentColor = KaaoColors.ObsidianBg
-                        )
-                    ) {
-                        Text("Quick Scan", fontWeight = FontWeight.Bold)
-                    }
                     OutlinedButton(
                         onClick = { viewModel.startDeepScanService() },
                         enabled = !state.progress.isScanning,
@@ -150,15 +148,14 @@ fun AntivirusScreen(
                     ) {
                         Text("Deep + APKs")
                     }
-                }
-                Spacer(modifier = Modifier.height(6.dp))
-                OutlinedButton(
-                    onClick = { viewModel.runStalkerwareAudit() },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Outlined.Policy, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Audit Stalkerware Privileges Now")
+                    OutlinedButton(
+                        onClick = { viewModel.runStalkerwareAudit() },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Outlined.Policy, contentDescription = null)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Privilege Audit")
+                    }
                 }
             }
         }

@@ -47,6 +47,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kaao.security.core.util.ByteFormatters
 import com.kaao.security.domain.model.AegisVpnMode
+import com.kaao.security.ui.components.CyberGradientButton
 import com.kaao.security.ui.components.HealthScoreGauge
 import com.kaao.security.ui.components.ScoreComponentRow
 import com.kaao.security.ui.components.SectionHeader
@@ -72,8 +73,8 @@ fun DashboardScreen(
         if (state.activeGameSession.isActive) {
             item {
                 SecurityCard(
-                    borderColor = KaaoColors.BoosterViolet,
-                    containerColor = KaaoColors.BoosterVioletContainer.copy(alpha = 0.4f)
+                    borderColor = KaaoColors.BoosterMagenta,
+                    containerColor = KaaoColors.BoosterVioletContainer.copy(alpha = 0.5f)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -84,7 +85,7 @@ fun DashboardScreen(
                             Text(
                                 text = "Game Booster Session Active",
                                 style = MaterialTheme.typography.titleMedium,
-                                color = KaaoColors.BoosterViolet
+                                color = KaaoColors.BoosterMagenta
                             )
                             Text(
                                 text = state.activeGameSession.activeGameName ?: "Game Mode",
@@ -102,7 +103,9 @@ fun DashboardScreen(
 
         // Transparent 0-100 Health Score Hero Card + Concurrent Smart Scan CTA
         item {
-            SecurityCard {
+            SecurityCard(
+                borderColor = KaaoColors.CyberEmerald.copy(alpha = 0.35f)
+            ) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
@@ -110,9 +113,9 @@ fun DashboardScreen(
                     Text(
                         text = "DEVICE SECURITY POSTURE",
                         style = MaterialTheme.typography.labelMedium,
-                        color = KaaoColors.TextSecondary
+                        color = KaaoColors.ShieldCyan
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
                     HealthScoreGauge(
                         score = state.healthReport.totalScore,
                         gradeLabel = state.healthReport.gradeLabel,
@@ -126,32 +129,17 @@ fun DashboardScreen(
                     )
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    Button(
-                        onClick = { viewModel.runSmartScan() },
-                        enabled = !state.smartScan.isRunning,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = KaaoColors.CyberEmerald,
-                            contentColor = KaaoColors.ObsidianBg
-                        )
-                    ) {
-                        if (state.smartScan.isRunning) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
-                                color = KaaoColors.ObsidianBg
-                            )
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text("Running Concurrent Smart Scan...", fontWeight = FontWeight.Bold)
+                    CyberGradientButton(
+                        text = if (state.smartScan.isRunning) {
+                            "Running Concurrent Smart Scan..."
                         } else {
-                            Icon(Icons.Outlined.Radar, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Run Concurrent Smart Scan", fontWeight = FontWeight.Bold)
-                        }
-                    }
+                            "Run Concurrent Smart Scan"
+                        },
+                        icon = Icons.Outlined.Radar,
+                        brush = KaaoColors.PrimaryActionGradient,
+                        isLoading = state.smartScan.isRunning,
+                        onClick = { viewModel.runSmartScan() }
+                    )
 
                     if (state.smartScan.isRunning) {
                         Spacer(modifier = Modifier.height(12.dp))
@@ -181,7 +169,8 @@ fun DashboardScreen(
                 ) {
                     SectionHeader(
                         title = "Transparent Score Breakdown",
-                        trailingText = if (showFormulaBreakdown) "Hide" else "Show"
+                        trailingText = if (showFormulaBreakdown) "Hide" else "Show",
+                        accentColor = KaaoColors.ShieldCyan
                     )
                 }
                 if (showFormulaBreakdown) {
@@ -198,7 +187,13 @@ fun DashboardScreen(
 
         // Real-Time Protection Toggle Card
         item {
-            SecurityCard {
+            SecurityCard(
+                borderColor = if (state.isRealtimeShieldActive) {
+                    KaaoColors.CyberEmerald.copy(alpha = 0.55f)
+                } else {
+                    KaaoColors.SurfaceBorder
+                }
+            ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -229,7 +224,7 @@ fun DashboardScreen(
             }
         }
 
-        // 2x2 Quick Module Navigation Grid
+        // 2x2 Color-Coded Module Navigation Grid
         item {
             SectionHeader(title = "Protection Modules")
             Spacer(modifier = Modifier.height(8.dp))
@@ -248,13 +243,13 @@ fun DashboardScreen(
                 ModuleQuickTile(
                     modifier = Modifier.weight(1f),
                     icon = Icons.Outlined.VpnLock,
-                    title = "Aegis Shield",
+                    title = "Web Shield",
                     metric = if (state.vpnState.mode == AegisVpnMode.DNS_SHIELD) {
                         "DoH On • ${state.blockedQueriesTotal} blk"
                     } else {
                         state.vpnState.mode.label
                     },
-                    accent = if (state.vpnState.mode != AegisVpnMode.OFF) KaaoColors.ShieldCyan else KaaoColors.TextSecondary,
+                    accent = KaaoColors.ShieldCyan,
                     onClick = { onNavigate(KaaoDestination.WEB_SHIELD) }
                 )
             }
@@ -268,7 +263,7 @@ fun DashboardScreen(
                     icon = Icons.Outlined.CleaningServices,
                     title = "Deep Cleaner",
                     metric = "${ByteFormatters.formatBytes(state.reclaimableBytes)} reclaimable",
-                    accent = KaaoColors.WarningAmber,
+                    accent = KaaoColors.CleanerCobalt,
                     onClick = { onNavigate(KaaoDestination.CLEANER) }
                 )
                 ModuleQuickTile(
@@ -369,6 +364,7 @@ private fun ModuleQuickTile(
 ) {
     SecurityCard(
         modifier = modifier.clickable(onClick = onClick),
+        borderColor = accent.copy(alpha = 0.4f),
         containerColor = KaaoColors.SurfaceElevated
     ) {
         Icon(

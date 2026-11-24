@@ -2,20 +2,24 @@ package com.kaao.security.ui.settings
 
 import android.content.Context
 import android.content.Intent
+import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kaao.security.core.crypto.BundleVerificationResult
 import com.kaao.security.core.crypto.KeystorePassphraseManager
 import com.kaao.security.core.permission.PermissionManager
 import com.kaao.security.core.permission.PermissionStatusSnapshot
+import com.kaao.security.core.security.BiometricLockManager
 import com.kaao.security.data.local.db.WhitelistEntryEntity
 import com.kaao.security.data.local.prefs.KaaoPreferencesRepository
 import com.kaao.security.data.local.prefs.KaaoSettings
+import com.kaao.security.domain.model.AutoScanInterval
 import com.kaao.security.engine.antivirus.AntivirusRepository
 import com.kaao.security.engine.antivirus.DefinitionFeedRepository
 import com.kaao.security.engine.cleaner.SafeDeletionRepository
 import com.kaao.security.service.RealtimeMonitorService
 import com.kaao.security.worker.DeltaPackageAuditWorker
+import com.kaao.security.worker.ScheduledAutoScanWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,6 +36,8 @@ data class SettingsUiState(
     val signatureCount: Int = 0,
     val bloomBitCapacity: Int = 0,
     val keystoreReady: Boolean = false,
+    val biometricAvailable: Boolean = false,
+    val biometricCapabilityLabel: String = "",
     val cleanerWhitelist: List<WhitelistEntryEntity> = emptyList(),
     val permissions: PermissionStatusSnapshot? = null,
     val statusBanner: String? = null
@@ -45,6 +51,7 @@ class SettingsViewModel @Inject constructor(
     private val definitionFeedRepository: DefinitionFeedRepository,
     private val safeDeletionRepository: SafeDeletionRepository,
     private val keystorePassphraseManager: KeystorePassphraseManager,
+    private val biometricLockManager: BiometricLockManager,
     private val permissionManager: PermissionManager
 ) : ViewModel() {
 
@@ -63,6 +70,8 @@ class SettingsViewModel @Inject constructor(
             signatureCount = sigCount,
             bloomBitCapacity = antivirusRepository.bloomCapacity,
             keystoreReady = keystorePassphraseManager.isHardwareKeyReady(),
+            biometricAvailable = biometricLockManager.canAuthenticate(),
+            biometricCapabilityLabel = biometricLockManager.capabilityLabel(),
             cleanerWhitelist = whitelist
         )
     }
@@ -78,12 +87,54 @@ class SettingsViewModel @Inject constructor(
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = SettingsUiState(
             keystoreReady = keystorePassphraseManager.isHardwareKeyReady(),
+            biometricAvailable = biometricLockManager.canAuthenticate(),
+            biometricCapabilityLabel = biometricLockManager.capabilityLabel(),
             permissions = permissionManager.getSnapshot()
         )
     )
 
     fun refreshPermissions() {
         permsFlow.value = permissionManager.getSnapshot()
+    }
+
+    fun requestBiometricLockToggle(activity: FragmentActivity?, enable: Boolean) {
+        if (!enable) {
+            viewModelScope.launch {
+                prefs.setBiometricLockEnabled(false)
+                bannerFlow.value = "Biometric Security Lock disabled."
+            }
+            return
+        }
+        if (!biometricLockManager.canAuthenticate() || activity == null) {
+            bannerFlow.value = "Set up a fingerprint, face unlock, or device PIN in Android Settings first."
+            return
+        }
+        biometricLockManager.authenticate(
+            activity = activity,
+            title = "Enable KAAO Security Lock",
+            subtitle = "Confirm biometrics or device PIN to lock KAAO on launch",
+            onSuccess = {
+                viewModelScope.launch {
+                    prefs.setBiometricLockEnabled(true)
+                    bannerFlow.value = "Hardware Biometric Security Lock enabled."
+                }
+            },
+            onError = { err ->
+                bannerFlow.value = "Biometric verification cancelled: $err"
+            }
+        )
+    }
+
+    fun selectAutoScanInterval(interval: AutoScanInterval) {
+        viewModelScope.launch {
+            prefs.setAutoScanInterval(interval)
+            ScheduledAutoScanWorker.applySchedule(context, interval)
+            bannerFlow.value = if (interval == AutoScanInterval.OFF) {
+                "Scheduled background auto-scan disabled."
+            } else {
+                "Scheduled auto-scan configured: ${interval.label} (battery-safe WorkManager)."
+            }
+        }
     }
 
     fun toggleRealtimeShield(enabled: Boolean) {
